@@ -47,7 +47,7 @@ _IDX_PILOTS  = {7, 21, 43, 57}       # subportadoras piloto (±7, ±21)
 _IDX_ESP32_PROBLEM = {1}             # subportadora 1 com leitura problemática no ESP32
 SUBCARRIERS_CONTROL = _IDX_DC | _IDX_GUARD | _IDX_PILOTS | _IDX_ESP32_PROBLEM
 SUBCARRIERS_DATA    = [i for i in range(64) if i not in SUBCARRIERS_CONTROL]
-# 51 subportadoras de dados: {2-6, 8-20, 22-26, 38-42, 44-56, 58-63}
+# 47 subportadoras de dados: {2-6, 8-20, 22-26, 38-42, 44-56, 58-63}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -216,15 +216,23 @@ def plot_por_subportadora(frames: list, iqr_fator: float = 3.0):
     axes[1].legend(fontsize=8)
     axes[1].grid(True, alpha=0.3)
 
-    # (c) heatmap – apenas subportadoras de dados; escala por percentil para usar toda a paleta
-    amp_data = amp_matrix[:, sub_data]
-    vmin_hm  = float(np.percentile(amp_data, 2))
-    vmax_hm  = float(np.percentile(amp_data, 98))
-    im = axes[2].imshow(amp_data.T, aspect="auto", origin="lower",
-                        cmap="inferno", vmin=vmin_hm, vmax=vmax_hm)
+    # (c) heatmap - eixo Y no indice REAL da subportadora (0..N_sub-1).
+    # As subportadoras de controle (DC, guarda, pilotos, idx 1) ficam mascaradas,
+    # para que a faixa de guarda apareca vazia em vez de comprimir o eixo.
+    amp_hm  = np.ma.masked_all((N_sub, amp_matrix.shape[0]), dtype=float)
+    amp_hm[sub_data, :] = amp_matrix[:, sub_data].T
+    vmin_hm = float(np.percentile(amp_matrix[:, sub_data], 2))
+    vmax_hm = float(np.percentile(amp_matrix[:, sub_data], 98))
+    cmap_hm = plt.get_cmap("inferno").copy()
+    cmap_hm.set_bad("lightgray")
+    im = axes[2].imshow(amp_hm, aspect="auto", origin="lower",
+                        cmap=cmap_hm, vmin=vmin_hm, vmax=vmax_hm,
+                        interpolation="nearest",
+                        extent=(-0.5, amp_matrix.shape[0] - 0.5, -0.5, N_sub - 0.5))
     axes[2].set_xlabel("Frame")
-    axes[2].set_ylabel("Subportadora de dados (posição)")
-    axes[2].set_title("Amplitude |H(t,k)| – heatmap\n(p2–p98, apenas subportadoras de dados)")
+    axes[2].set_ylabel("Subportadora (indice real 0-63)")
+    axes[2].set_yticks(np.arange(0, N_sub, 4))
+    axes[2].set_title("Amplitude |H(t,k)| - heatmap\n(p2-p98; cinza = controle/guarda)")
     fig.colorbar(im, ax=axes[2], label="|H|")
 
     plt.tight_layout()
